@@ -8,12 +8,18 @@
 
         <script src="https://cdn.jsdelivr.net/npm/vue"></script>
 
+        <!-- Onsen UI -->
+        <link rel="stylesheet" href="https://unpkg.com/onsenui/css/onsenui.css">
+        <link rel="stylesheet" href="https://unpkg.com/onsenui/css/onsen-css-components.min.css">
+        <script src="https://unpkg.com/onsenui/js/onsenui.min.js"></script>
+
         <title>Hello, PWA !!</title>
     </head>
     <body>
 
         <div id='app'>
             <h1>{{message}}</h1>
+            <ons-button onclick="ons.notification.alert('Hello World!')">Click Me</ons-button>
         </div>
 
         <script>
@@ -35,8 +41,9 @@
             var vue = new Vue({
                 el: '#app',
                 data: {
-                    message: 'Hello, Vue !'
+                    message: 'Hello, Vue !!'
                 }
             })
         </script>
-    </body> </html>
+    </body>
+</html>
