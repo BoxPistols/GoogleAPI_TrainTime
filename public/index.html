@@ -1,23 +1,91 @@
-<!DOCTYPE  html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport"  content="width=device-width, initial-scale=1">
-    <link rel="manifest"  href="./manifest.json">
-    <link rel="stylesheet"  href="./css/style.css">
-    <title>Hello, PWA !!</title>
-  </head>
-  <body>
-    <p>Hello, World !!</p>
-    <script>
-      // ServiceWorker登録
-      if ('serviceWorker'  in navigator) {
-        navigator.serviceWorker.register('./sw.js').then(function(registration) {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        }).catch(function(err) {
-          console.log('ServiceWorker registration failed: ', err);
-        });
-      }
-    </script>
-  </body>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a73e8">
+  <meta name="description" content="シンプルな乗換案内アプリ">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="icon" href="./images/app-icon-192.png">
+  <link rel="apple-touch-icon" href="./images/app-icon-192.png">
+  <title>電車乗換案内</title>
+</head>
+<body>
+  <div class="app">
+    <!-- ヘッダー -->
+    <header class="header">
+      <h1>電車乗換案内</h1>
+    </header>
+
+    <!-- 検索フォーム -->
+    <main class="main">
+      <div class="search-card">
+        <div class="input-group">
+          <label for="departure">出発駅</label>
+          <input
+            type="text"
+            id="departure"
+            placeholder="駅名を入力"
+            autocomplete="off"
+          >
+          <ul id="departure-suggestions" class="suggestions"></ul>
+        </div>
+
+        <button id="swap-btn" class="swap-btn" title="出発と到着を入れ替え">
+          <span>⇅</span>
+        </button>
+
+        <div class="input-group">
+          <label for="arrival">到着駅</label>
+          <input
+            type="text"
+            id="arrival"
+            placeholder="駅名を入力"
+            autocomplete="off"
+          >
+          <ul id="arrival-suggestions" class="suggestions"></ul>
+        </div>
+
+        <div class="time-options">
+          <div class="time-type">
+            <label>
+              <input type="radio" name="time-type" value="departure" checked>
+              出発時刻
+            </label>
+            <label>
+              <input type="radio" name="time-type" value="arrival">
+              到着時刻
+            </label>
+          </div>
+          <div class="time-input">
+            <input type="datetime-local" id="datetime">
+            <button id="now-btn" class="now-btn">現在時刻</button>
+          </div>
+        </div>
+
+        <button id="search-btn" class="search-btn">検索</button>
+      </div>
+
+      <!-- 検索結果 -->
+      <div id="results" class="results"></div>
+
+      <!-- ローディング -->
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>検索中...</p>
+      </div>
+
+      <!-- エラーメッセージ -->
+      <div id="error" class="error hidden"></div>
+    </main>
+
+    <!-- フッター -->
+    <footer class="footer">
+      <p>Powered by Google Maps API</p>
+    </footer>
+  </div>
+
+  <script src="./js/app.js"></script>
+</body>
 </html>
