@@ -127,6 +127,8 @@ const errorDiv = document.getElementById('error');
 // 状態
 let selectedDeparture = null;
 let selectedArrival = null;
+let currentRouteIndex = 0;
+let totalRoutes = 0;
 
 /**
  * 初期化
@@ -142,6 +144,7 @@ function init() {
   departureInput.addEventListener('focus', () => handleInput(departureInput, departureSuggestions));
   arrivalInput.addEventListener('focus', () => handleInput(arrivalInput, arrivalSuggestions));
 
+  // クリック外でサジェストを閉じる
   document.addEventListener('click', (e) => {
     if (!departureInput.contains(e.target) && !departureSuggestions.contains(e.target)) {
       departureSuggestions.classList.remove('active');
@@ -151,15 +154,42 @@ function init() {
     }
   });
 
+  // タッチ操作でもサジェストを閉じる
+  document.addEventListener('touchstart', (e) => {
+    if (!departureInput.contains(e.target) && !departureSuggestions.contains(e.target)) {
+      departureSuggestions.classList.remove('active');
+    }
+    if (!arrivalInput.contains(e.target) && !arrivalSuggestions.contains(e.target)) {
+      arrivalSuggestions.classList.remove('active');
+    }
+  }, { passive: true });
+
   swapBtn.addEventListener('click', swapStations);
   nowBtn.addEventListener('click', setCurrentTime);
   searchBtn.addEventListener('click', search);
+
+  // キーボードショートカット
+  document.addEventListener('keydown', handleKeyboard);
 
   // Service Worker登録
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then(reg => console.log('ServiceWorker registered:', reg.scope))
       .catch(err => console.error('ServiceWorker registration failed:', err));
+  }
+}
+
+/**
+ * キーボードショートカット
+ */
+function handleKeyboard(e) {
+  // Enterで検索
+  if (e.key === 'Enter' && !e.isComposing) {
+    const activeEl = document.activeElement;
+    if (activeEl === departureInput || activeEl === arrivalInput || activeEl === datetimeInput) {
+      e.preventDefault();
+      search();
+    }
   }
 }
 
@@ -215,7 +245,9 @@ function showSuggestions(stations, input, suggestionsEl) {
       <div class="station-name">${station.name}駅</div>
       <div class="line-info">${station.lines.slice(0, 3).join('・')}</div>
     `;
-    li.addEventListener('click', () => {
+
+    // クリックとタッチの両方に対応
+    const selectStation = () => {
       input.value = station.name + '駅';
       if (input === departureInput) {
         selectedDeparture = station;
@@ -223,7 +255,9 @@ function showSuggestions(stations, input, suggestionsEl) {
         selectedArrival = station;
       }
       suggestionsEl.classList.remove('active');
-    });
+    };
+
+    li.addEventListener('click', selectStation);
     suggestionsEl.appendChild(li);
   });
 
@@ -241,6 +275,12 @@ function swapStations() {
   const tempStation = selectedDeparture;
   selectedDeparture = selectedArrival;
   selectedArrival = tempStation;
+
+  // アニメーション効果
+  swapBtn.style.transform = 'rotate(180deg)';
+  setTimeout(() => {
+    swapBtn.style.transform = '';
+  }, 200);
 }
 
 /**
@@ -255,10 +295,12 @@ async function search() {
   // バリデーション
   if (!departure) {
     showError('出発駅を入力してください');
+    departureInput.focus();
     return;
   }
   if (!arrival) {
     showError('到着駅を入力してください');
+    arrivalInput.focus();
     return;
   }
 
@@ -299,7 +341,7 @@ async function search() {
 }
 
 /**
- * 検索結果を表示
+ * 検索結果を表示（スワイプ対応）
  */
 function displayResults(data) {
   if (!data.routes || data.routes.length === 0) {
@@ -307,8 +349,42 @@ function displayResults(data) {
     return;
   }
 
-  resultsDiv.innerHTML = data.routes.map((route, index) => `
-    <div class="route-card">
+  totalRoutes = data.routes.length;
+  currentRouteIndex = 0;
+
+  // モバイルかどうかを判定
+  const isMobile = window.innerWidth < 768;
+
+  if (isMobile && totalRoutes > 1) {
+    // モバイル: スワイプ可能なカルーセル表示
+    resultsDiv.innerHTML = `
+      <div class="results-swiper" id="results-swiper">
+        ${data.routes.map((route, index) => createRouteCard(route, index)).join('')}
+      </div>
+      <div class="route-indicator" id="route-indicator">
+        ${data.routes.map((_, index) => `
+          <div class="route-dot ${index === 0 ? 'active' : ''}" data-index="${index}"></div>
+        `).join('')}
+      </div>
+    `;
+
+    // スワイプイベント設定
+    setupSwipeNavigation();
+  } else {
+    // デスクトップ/タブレット: 通常の縦並び表示
+    resultsDiv.innerHTML = data.routes.map((route, index) => createRouteCard(route, index)).join('');
+  }
+
+  // 結果までスクロール
+  resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/**
+ * ルートカードのHTML生成
+ */
+function createRouteCard(route, index) {
+  return `
+    <div class="route-card" data-route-index="${index}">
       <div class="route-header">
         <div>
           <div class="route-time">${route.departureTime} → ${route.arrivalTime}</div>
@@ -333,7 +409,97 @@ function displayResults(data) {
         `).join('')}
       </div>
     </div>
-  `).join('');
+  `;
+}
+
+/**
+ * スワイプナビゲーションの設定
+ */
+function setupSwipeNavigation() {
+  const swiper = document.getElementById('results-swiper');
+  const indicator = document.getElementById('route-indicator');
+
+  if (!swiper || !indicator) return;
+
+  // スクロールイベントでインジケーター更新
+  let scrollTimeout;
+  swiper.addEventListener('scroll', () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      const cardWidth = swiper.querySelector('.route-card').offsetWidth + 12; // gap含む
+      const newIndex = Math.round(swiper.scrollLeft / cardWidth);
+
+      if (newIndex !== currentRouteIndex && newIndex >= 0 && newIndex < totalRoutes) {
+        currentRouteIndex = newIndex;
+        updateIndicator();
+      }
+    }, 50);
+  }, { passive: true });
+
+  // インジケータークリックでカードに移動
+  indicator.addEventListener('click', (e) => {
+    const dot = e.target.closest('.route-dot');
+    if (dot) {
+      const index = parseInt(dot.dataset.index, 10);
+      scrollToRoute(index);
+    }
+  });
+
+  // タッチジェスチャー補助（より良いスナップ動作）
+  let touchStartX = 0;
+  let touchStartTime = 0;
+
+  swiper.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartTime = Date.now();
+  }, { passive: true });
+
+  swiper.addEventListener('touchend', (e) => {
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndTime = Date.now();
+    const diffX = touchStartX - touchEndX;
+    const diffTime = touchEndTime - touchStartTime;
+
+    // 素早いスワイプ（フリック）を検出
+    if (diffTime < 300 && Math.abs(diffX) > 50) {
+      if (diffX > 0 && currentRouteIndex < totalRoutes - 1) {
+        // 左スワイプ → 次へ
+        scrollToRoute(currentRouteIndex + 1);
+      } else if (diffX < 0 && currentRouteIndex > 0) {
+        // 右スワイプ → 前へ
+        scrollToRoute(currentRouteIndex - 1);
+      }
+    }
+  }, { passive: true });
+}
+
+/**
+ * 指定インデックスのルートにスクロール
+ */
+function scrollToRoute(index) {
+  const swiper = document.getElementById('results-swiper');
+  if (!swiper) return;
+
+  const cards = swiper.querySelectorAll('.route-card');
+  if (cards[index]) {
+    const cardWidth = cards[index].offsetWidth + 12;
+    swiper.scrollTo({
+      left: index * cardWidth,
+      behavior: 'smooth'
+    });
+    currentRouteIndex = index;
+    updateIndicator();
+  }
+}
+
+/**
+ * インジケーター更新
+ */
+function updateIndicator() {
+  const dots = document.querySelectorAll('.route-dot');
+  dots.forEach((dot, index) => {
+    dot.classList.toggle('active', index === currentRouteIndex);
+  });
 }
 
 /**
@@ -353,11 +519,39 @@ function hideLoading() {
 function showError(message) {
   errorDiv.textContent = message;
   errorDiv.classList.remove('hidden');
+
+  // 振動フィードバック（対応端末のみ）
+  if ('vibrate' in navigator) {
+    navigator.vibrate(100);
+  }
 }
 
 function hideError() {
   errorDiv.classList.add('hidden');
 }
+
+/**
+ * 画面サイズ変更時の処理
+ */
+function handleResize() {
+  // 画面サイズが変わった場合、結果の表示形式を更新
+  const swiper = document.getElementById('results-swiper');
+  const isMobile = window.innerWidth < 768;
+
+  if (swiper && !isMobile) {
+    // タブレット/デスクトップになった場合、スワイプをリセット
+    swiper.scrollLeft = 0;
+    currentRouteIndex = 0;
+    updateIndicator();
+  }
+}
+
+// リサイズイベント（デバウンス付き）
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(handleResize, 250);
+});
 
 // 初期化実行
 document.addEventListener('DOMContentLoaded', init);
