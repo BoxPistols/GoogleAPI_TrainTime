@@ -223,6 +223,20 @@ html, body {
   padding: 16px;
   background: var(--bg-input);
   border-radius: 12px;
+  border: none;
+}
+
+/* アクセシビリティ: スクリーンリーダー用非表示 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .time-type {

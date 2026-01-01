@@ -1,9 +1,13 @@
 /**
  * 電車乗換案内アプリ
+ * セキュリティ・アクセシビリティ対応版
  */
 
 // APIエンドポイント（Cloud Functions）
 const API_BASE = '/api';
+
+// 線路バッジの最大表示数
+const MAX_LINE_BADGES = 3;
 
 // 主要駅リスト（オフラインでも検索できるように）
 const STATIONS = [
@@ -112,6 +116,7 @@ const STATIONS = [
 ];
 
 // DOM要素
+const searchForm = document.getElementById('search-form');
 const departureInput = document.getElementById('departure');
 const arrivalInput = document.getElementById('arrival');
 const departureSuggestions = document.getElementById('departure-suggestions');
@@ -131,11 +136,28 @@ let currentRouteIndex = 0;
 let totalRoutes = 0;
 
 /**
+ * テキストをエスケープ（XSS対策）
+ * @param {string} text - エスケープするテキスト
+ * @returns {string} - エスケープ済みテキスト
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
  * 初期化
  */
 function init() {
   // 現在時刻をセット
   setCurrentTime();
+
+  // フォームのsubmitイベント
+  searchForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    search();
+  });
 
   // イベントリスナー設定
   departureInput.addEventListener('input', () => handleInput(departureInput, departureSuggestions));
@@ -147,29 +169,29 @@ function init() {
   // クリック外でサジェストを閉じる
   document.addEventListener('click', (e) => {
     if (!departureInput.contains(e.target) && !departureSuggestions.contains(e.target)) {
-      departureSuggestions.classList.remove('active');
+      closeSuggestions(departureInput, departureSuggestions);
     }
     if (!arrivalInput.contains(e.target) && !arrivalSuggestions.contains(e.target)) {
-      arrivalSuggestions.classList.remove('active');
+      closeSuggestions(arrivalInput, arrivalSuggestions);
     }
   });
 
   // タッチ操作でもサジェストを閉じる
   document.addEventListener('touchstart', (e) => {
     if (!departureInput.contains(e.target) && !departureSuggestions.contains(e.target)) {
-      departureSuggestions.classList.remove('active');
+      closeSuggestions(departureInput, departureSuggestions);
     }
     if (!arrivalInput.contains(e.target) && !arrivalSuggestions.contains(e.target)) {
-      arrivalSuggestions.classList.remove('active');
+      closeSuggestions(arrivalInput, arrivalSuggestions);
     }
   }, { passive: true });
 
   swapBtn.addEventListener('click', swapStations);
   nowBtn.addEventListener('click', setCurrentTime);
-  searchBtn.addEventListener('click', search);
 
-  // キーボードショートカット
-  document.addEventListener('keydown', handleKeyboard);
+  // キーボードナビゲーション
+  departureInput.addEventListener('keydown', (e) => handleKeyboardNavigation(e, departureSuggestions));
+  arrivalInput.addEventListener('keydown', (e) => handleKeyboardNavigation(e, arrivalSuggestions));
 
   // Service Worker登録
   if ('serviceWorker' in navigator) {
@@ -180,17 +202,55 @@ function init() {
 }
 
 /**
- * キーボードショートカット
+ * キーボードナビゲーション
  */
-function handleKeyboard(e) {
-  // Enterで検索
-  if (e.key === 'Enter' && !e.isComposing) {
-    const activeEl = document.activeElement;
-    if (activeEl === departureInput || activeEl === arrivalInput || activeEl === datetimeInput) {
+function handleKeyboardNavigation(e, suggestionsEl) {
+  const items = suggestionsEl.querySelectorAll('li');
+  const activeItem = suggestionsEl.querySelector('li.selected');
+  let currentIndex = Array.from(items).indexOf(activeItem);
+
+  switch (e.key) {
+    case 'ArrowDown':
       e.preventDefault();
-      search();
-    }
+      currentIndex = Math.min(currentIndex + 1, items.length - 1);
+      updateSelectedItem(items, currentIndex);
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      currentIndex = Math.max(currentIndex - 1, 0);
+      updateSelectedItem(items, currentIndex);
+      break;
+    case 'Enter':
+      if (activeItem && suggestionsEl.classList.contains('active')) {
+        e.preventDefault();
+        activeItem.click();
+      }
+      break;
+    case 'Escape':
+      closeSuggestions(e.target, suggestionsEl);
+      break;
   }
+}
+
+/**
+ * 選択アイテムの更新
+ */
+function updateSelectedItem(items, index) {
+  items.forEach((item, i) => {
+    item.classList.toggle('selected', i === index);
+    item.setAttribute('aria-selected', i === index ? 'true' : 'false');
+  });
+  if (items[index]) {
+    items[index].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+/**
+ * サジェストを閉じる
+ */
+function closeSuggestions(input, suggestionsEl) {
+  suggestionsEl.classList.remove('active');
+  input.setAttribute('aria-expanded', 'false');
 }
 
 /**
@@ -229,39 +289,52 @@ function handleInput(input, suggestionsEl) {
 }
 
 /**
- * サジェスト表示
+ * サジェスト表示（DOM操作でXSS対策）
  */
 function showSuggestions(stations, input, suggestionsEl) {
-  suggestionsEl.innerHTML = '';
+  // 既存の内容をクリア
+  while (suggestionsEl.firstChild) {
+    suggestionsEl.removeChild(suggestionsEl.firstChild);
+  }
 
   if (stations.length === 0) {
-    suggestionsEl.classList.remove('active');
+    closeSuggestions(input, suggestionsEl);
     return;
   }
 
-  stations.forEach(station => {
+  stations.forEach((station, index) => {
     const li = document.createElement('li');
-    li.innerHTML = `
-      <div class="station-name">${station.name}駅</div>
-      <div class="line-info">${station.lines.slice(0, 3).join('・')}</div>
-    `;
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', 'false');
+    li.id = `${suggestionsEl.id}-option-${index}`;
+
+    const stationName = document.createElement('div');
+    stationName.className = 'station-name';
+    stationName.textContent = station.name + '駅';
+
+    const lineInfo = document.createElement('div');
+    lineInfo.className = 'line-info';
+    lineInfo.textContent = station.lines.slice(0, 3).join('・');
+
+    li.appendChild(stationName);
+    li.appendChild(lineInfo);
 
     // クリックとタッチの両方に対応
-    const selectStation = () => {
+    li.addEventListener('click', () => {
       input.value = station.name + '駅';
       if (input === departureInput) {
         selectedDeparture = station;
       } else {
         selectedArrival = station;
       }
-      suggestionsEl.classList.remove('active');
-    };
+      closeSuggestions(input, suggestionsEl);
+    });
 
-    li.addEventListener('click', selectStation);
     suggestionsEl.appendChild(li);
   });
 
   suggestionsEl.classList.add('active');
+  input.setAttribute('aria-expanded', 'true');
 }
 
 /**
@@ -308,7 +381,11 @@ async function search() {
   hideError();
   showLoading();
   searchBtn.disabled = true;
-  resultsDiv.innerHTML = '';
+
+  // 結果をクリア
+  while (resultsDiv.firstChild) {
+    resultsDiv.removeChild(resultsDiv.firstChild);
+  }
 
   try {
     const response = await fetch(`${API_BASE}/route`, {
@@ -325,7 +402,8 @@ async function search() {
     });
 
     if (!response.ok) {
-      throw new Error('検索に失敗しました');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || '検索に失敗しました');
     }
 
     const data = await response.json();
@@ -341,7 +419,7 @@ async function search() {
 }
 
 /**
- * 検索結果を表示（スワイプ対応）
+ * 検索結果を表示（DOM操作でXSS対策・スワイプ対応）
  */
 function displayResults(data) {
   if (!data.routes || data.routes.length === 0) {
@@ -352,27 +430,47 @@ function displayResults(data) {
   totalRoutes = data.routes.length;
   currentRouteIndex = 0;
 
+  // 結果をクリア
+  while (resultsDiv.firstChild) {
+    resultsDiv.removeChild(resultsDiv.firstChild);
+  }
+
   // モバイルかどうかを判定
   const isMobile = window.innerWidth < 768;
 
   if (isMobile && totalRoutes > 1) {
     // モバイル: スワイプ可能なカルーセル表示
-    resultsDiv.innerHTML = `
-      <div class="results-swiper" id="results-swiper">
-        ${data.routes.map((route, index) => createRouteCard(route, index)).join('')}
-      </div>
-      <div class="route-indicator" id="route-indicator">
-        ${data.routes.map((_, index) => `
-          <div class="route-dot ${index === 0 ? 'active' : ''}" data-index="${index}"></div>
-        `).join('')}
-      </div>
-    `;
+    const swiper = document.createElement('div');
+    swiper.className = 'results-swiper';
+    swiper.id = 'results-swiper';
+
+    data.routes.forEach((route, index) => {
+      swiper.appendChild(createRouteCard(route, index));
+    });
+
+    resultsDiv.appendChild(swiper);
+
+    // インジケーター
+    const indicator = document.createElement('div');
+    indicator.className = 'route-indicator';
+    indicator.id = 'route-indicator';
+
+    data.routes.forEach((_, index) => {
+      const dot = document.createElement('div');
+      dot.className = 'route-dot' + (index === 0 ? ' active' : '');
+      dot.dataset.index = index;
+      indicator.appendChild(dot);
+    });
+
+    resultsDiv.appendChild(indicator);
 
     // スワイプイベント設定
     setupSwipeNavigation();
   } else {
     // デスクトップ/タブレット: 通常の縦並び表示
-    resultsDiv.innerHTML = data.routes.map((route, index) => createRouteCard(route, index)).join('');
+    data.routes.forEach((route, index) => {
+      resultsDiv.appendChild(createRouteCard(route, index));
+    });
   }
 
   // 結果までスクロール
@@ -380,36 +478,107 @@ function displayResults(data) {
 }
 
 /**
- * ルートカードのHTML生成
+ * ルートカードのDOM要素を生成（XSS対策）
  */
 function createRouteCard(route, index) {
-  return `
-    <div class="route-card" data-route-index="${index}">
-      <div class="route-header">
-        <div>
-          <div class="route-time">${route.departureTime} → ${route.arrivalTime}</div>
-          <div class="route-duration">${route.duration}</div>
-        </div>
-        <div class="route-fare">${route.fare}</div>
-      </div>
-      <div class="route-summary">
-        ${route.transfers > 0
-          ? `<span class="route-badge transfer">乗換 ${route.transfers}回</span>`
-          : '<span class="route-badge">直通</span>'}
-        ${route.lines.map(line => `<span class="route-badge">${line}</span>`).join('')}
-      </div>
-      <div class="route-steps">
-        ${route.steps.map(step => `
-          <div class="route-step ${step.type}">
-            <div class="step-time">${step.time}</div>
-            <div class="step-station">${step.station}</div>
-            ${step.line ? `<div class="step-line ${step.type}">${step.line}</div>` : ''}
-            ${step.info ? `<div class="step-info">${step.info}</div>` : ''}
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
+  const card = document.createElement('article');
+  card.className = 'route-card';
+  card.dataset.routeIndex = index;
+
+  // ヘッダー
+  const header = document.createElement('div');
+  header.className = 'route-header';
+
+  const timeContainer = document.createElement('div');
+  const routeTime = document.createElement('div');
+  routeTime.className = 'route-time';
+  routeTime.textContent = `${route.departureTime} → ${route.arrivalTime}`;
+
+  const routeDuration = document.createElement('div');
+  routeDuration.className = 'route-duration';
+  routeDuration.textContent = route.duration;
+
+  timeContainer.appendChild(routeTime);
+  timeContainer.appendChild(routeDuration);
+
+  const routeFare = document.createElement('div');
+  routeFare.className = 'route-fare';
+  routeFare.textContent = route.fare;
+
+  header.appendChild(timeContainer);
+  header.appendChild(routeFare);
+  card.appendChild(header);
+
+  // サマリー
+  const summary = document.createElement('div');
+  summary.className = 'route-summary';
+
+  // 乗換バッジ
+  const transferBadge = document.createElement('span');
+  transferBadge.className = 'route-badge' + (route.transfers > 0 ? ' transfer' : '');
+  transferBadge.textContent = route.transfers > 0 ? `乗換 ${route.transfers}回` : '直通';
+  summary.appendChild(transferBadge);
+
+  // 路線バッジ（最大数制限）
+  const displayLines = route.lines.slice(0, MAX_LINE_BADGES);
+  displayLines.forEach(line => {
+    const lineBadge = document.createElement('span');
+    lineBadge.className = 'route-badge';
+    lineBadge.textContent = line;
+    summary.appendChild(lineBadge);
+  });
+
+  // 省略表示
+  if (route.lines.length > MAX_LINE_BADGES) {
+    const moreBadge = document.createElement('span');
+    moreBadge.className = 'route-badge';
+    moreBadge.textContent = `+${route.lines.length - MAX_LINE_BADGES}`;
+    moreBadge.title = route.lines.slice(MAX_LINE_BADGES).join('、');
+    summary.appendChild(moreBadge);
+  }
+
+  card.appendChild(summary);
+
+  // ステップ
+  const steps = document.createElement('div');
+  steps.className = 'route-steps';
+
+  route.steps.forEach(step => {
+    const stepEl = document.createElement('div');
+    stepEl.className = 'route-step ' + step.type;
+
+    if (step.time) {
+      const stepTime = document.createElement('div');
+      stepTime.className = 'step-time';
+      stepTime.textContent = step.time;
+      stepEl.appendChild(stepTime);
+    }
+
+    const stepStation = document.createElement('div');
+    stepStation.className = 'step-station';
+    stepStation.textContent = step.station;
+    stepEl.appendChild(stepStation);
+
+    if (step.line) {
+      const stepLine = document.createElement('div');
+      stepLine.className = 'step-line ' + step.type;
+      stepLine.textContent = step.line;
+      stepEl.appendChild(stepLine);
+    }
+
+    if (step.info) {
+      const stepInfo = document.createElement('div');
+      stepInfo.className = 'step-info';
+      stepInfo.textContent = step.info;
+      stepEl.appendChild(stepInfo);
+    }
+
+    steps.appendChild(stepEl);
+  });
+
+  card.appendChild(steps);
+
+  return card;
 }
 
 /**
@@ -426,7 +595,10 @@ function setupSwipeNavigation() {
   swiper.addEventListener('scroll', () => {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
-      const cardWidth = swiper.querySelector('.route-card').offsetWidth + 12; // gap含む
+      const card = swiper.querySelector('.route-card');
+      if (!card) return;
+
+      const cardWidth = card.offsetWidth + 12; // gap含む
       const newIndex = Math.round(swiper.scrollLeft / cardWidth);
 
       if (newIndex !== currentRouteIndex && newIndex >= 0 && newIndex < totalRoutes) {

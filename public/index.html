@@ -20,35 +20,62 @@
 
     <!-- 検索フォーム -->
     <main class="main">
-      <div class="search-card">
+      <form id="search-form" class="search-card" role="search" aria-label="乗換検索">
         <div class="input-group">
-          <label for="departure">出発駅</label>
+          <label for="departure" id="departure-label">出発駅</label>
           <input
             type="text"
             id="departure"
             placeholder="駅名を入力"
             autocomplete="off"
+            aria-labelledby="departure-label"
+            aria-autocomplete="list"
+            aria-controls="departure-suggestions"
+            aria-expanded="false"
+            role="combobox"
           >
-          <ul id="departure-suggestions" class="suggestions"></ul>
+          <ul
+            id="departure-suggestions"
+            class="suggestions"
+            role="listbox"
+            aria-label="出発駅の候補"
+          ></ul>
         </div>
 
-        <button id="swap-btn" class="swap-btn" title="出発と到着を入れ替え">
-          <span>⇅</span>
+        <button
+          type="button"
+          id="swap-btn"
+          class="swap-btn"
+          title="出発と到着を入れ替え"
+          aria-label="出発駅と到着駅を入れ替え"
+        >
+          <span aria-hidden="true">&#8693;</span>
         </button>
 
         <div class="input-group">
-          <label for="arrival">到着駅</label>
+          <label for="arrival" id="arrival-label">到着駅</label>
           <input
             type="text"
             id="arrival"
             placeholder="駅名を入力"
             autocomplete="off"
+            aria-labelledby="arrival-label"
+            aria-autocomplete="list"
+            aria-controls="arrival-suggestions"
+            aria-expanded="false"
+            role="combobox"
           >
-          <ul id="arrival-suggestions" class="suggestions"></ul>
+          <ul
+            id="arrival-suggestions"
+            class="suggestions"
+            role="listbox"
+            aria-label="到着駅の候補"
+          ></ul>
         </div>
 
-        <div class="time-options">
-          <div class="time-type">
+        <fieldset class="time-options">
+          <legend class="visually-hidden">時刻指定オプション</legend>
+          <div class="time-type" role="radiogroup" aria-label="時刻タイプ">
             <label>
               <input type="radio" name="time-type" value="departure" checked>
               出発時刻
@@ -59,25 +86,45 @@
             </label>
           </div>
           <div class="time-input">
-            <input type="datetime-local" id="datetime">
-            <button id="now-btn" class="now-btn">現在時刻</button>
+            <input
+              type="datetime-local"
+              id="datetime"
+              aria-label="日時を選択"
+            >
+            <button
+              type="button"
+              id="now-btn"
+              class="now-btn"
+              aria-label="現在時刻を設定"
+            >現在時刻</button>
           </div>
-        </div>
+        </fieldset>
 
-        <button id="search-btn" class="search-btn">検索</button>
-      </div>
+        <button type="submit" id="search-btn" class="search-btn">検索</button>
+      </form>
 
       <!-- 検索結果 -->
-      <div id="results" class="results"></div>
+      <section
+        id="results"
+        class="results"
+        role="region"
+        aria-label="検索結果"
+        aria-live="polite"
+      ></section>
 
       <!-- ローディング -->
-      <div id="loading" class="loading hidden">
-        <div class="spinner"></div>
+      <div id="loading" class="loading hidden" role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
         <p>検索中...</p>
       </div>
 
       <!-- エラーメッセージ -->
-      <div id="error" class="error hidden"></div>
+      <div
+        id="error"
+        class="error hidden"
+        role="alert"
+        aria-live="assertive"
+      ></div>
     </main>
 
     <!-- フッター -->
