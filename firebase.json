@@ -5,11 +5,42 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/route",
+        "function": "route"
+      },
+      {
+        "source": "/api/health",
+        "function": "health"
+      },
+      {
+        "source": "/api/railways",
+        "function": "railways"
+      },
+      {
+        "source": "/api/stations",
+        "function": "stations"
+      },
+      {
+        "source": "/api/timetable",
+        "function": "timetable"
+      },
+      {
+        "source": "/api/traininfo",
+        "function": "traininfo"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ]
   },
   "functions": {
     "predeploy": [
       "npm --prefix \"$RESOURCE_DIR\" run lint"
-    ]
+    ],
+    "source": "functions"
   }
 }
