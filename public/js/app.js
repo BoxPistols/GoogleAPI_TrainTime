@@ -115,7 +115,7 @@ const STATIONS = [
   { name: '浦安', reading: 'うらやす', lines: ['東西線'] },
 ];
 
-// DOM要素
+// DOM要素 - ルート検索
 const searchForm = document.getElementById('search-form');
 const departureInput = document.getElementById('departure');
 const arrivalInput = document.getElementById('arrival');
@@ -129,11 +129,31 @@ const resultsDiv = document.getElementById('results');
 const loadingDiv = document.getElementById('loading');
 const errorDiv = document.getElementById('error');
 
+// DOM要素 - タブ
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.panel');
+
+// DOM要素 - 時刻表
+const railwaySelect = document.getElementById('railway-select');
+const stationSelect = document.getElementById('station-select');
+const calendarTabs = document.querySelectorAll('.calendar-tab');
+const timetableBtn = document.getElementById('timetable-btn');
+const timetableResults = document.getElementById('timetable-results');
+const timetableLoading = document.getElementById('timetable-loading');
+
+// DOM要素 - 運行情報
+const traininfoBtn = document.getElementById('traininfo-btn');
+const traininfoResults = document.getElementById('traininfo-results');
+const traininfoLoading = document.getElementById('traininfo-loading');
+
 // 状態
 let selectedDeparture = null;
 let selectedArrival = null;
 let currentRouteIndex = 0;
 let totalRoutes = 0;
+let selectedCalendar = 'weekday';
+let selectedRailway = null;
+let selectedStation = null;
 
 /**
  * テキストをエスケープ（XSS対策）
@@ -193,11 +213,477 @@ function init() {
   departureInput.addEventListener('keydown', (e) => handleKeyboardNavigation(e, departureSuggestions));
   arrivalInput.addEventListener('keydown', (e) => handleKeyboardNavigation(e, arrivalSuggestions));
 
+  // タブ切り替え
+  initTabs();
+
+  // 時刻表機能
+  initTimetable();
+
+  // 運行情報機能
+  initTraininfo();
+
   // Service Worker登録
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then(reg => console.log('ServiceWorker registered:', reg.scope))
       .catch(err => console.error('ServiceWorker registration failed:', err));
+  }
+}
+
+/**
+ * タブ切り替え初期化
+ */
+function initTabs() {
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetId = tab.getAttribute('aria-controls');
+
+      // タブの状態更新
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+
+      // パネルの表示切替
+      panels.forEach(panel => {
+        if (panel.id === targetId) {
+          panel.classList.remove('hidden');
+        } else {
+          panel.classList.add('hidden');
+        }
+      });
+    });
+  });
+}
+
+/**
+ * 時刻表機能初期化
+ */
+function initTimetable() {
+  // 路線データをロード（オフライン用マスタデータから）
+  if (typeof ODPT_RAILWAYS !== 'undefined') {
+    loadRailwaysFromMaster();
+  }
+
+  // 路線選択時
+  railwaySelect.addEventListener('change', () => {
+    const railwayId = railwaySelect.value;
+    if (railwayId) {
+      selectedRailway = railwayId;
+      loadStationsForRailway(railwayId);
+    } else {
+      selectedRailway = null;
+      stationSelect.innerHTML = '<option value="">駅を選択してください</option>';
+      stationSelect.disabled = true;
+      timetableBtn.disabled = true;
+    }
+  });
+
+  // 駅選択時
+  stationSelect.addEventListener('change', () => {
+    selectedStation = stationSelect.value;
+    timetableBtn.disabled = !selectedStation;
+  });
+
+  // カレンダータブ
+  calendarTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      calendarTabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      selectedCalendar = tab.dataset.calendar;
+    });
+  });
+
+  // 時刻表取得ボタン
+  timetableBtn.addEventListener('click', fetchTimetable);
+}
+
+/**
+ * マスタデータから路線をロード
+ */
+function loadRailwaysFromMaster() {
+  // オペレーター別にグループ化
+  const operators = {
+    'TokyoMetro': '東京メトロ',
+    'Toei': '都営地下鉄',
+    'JR-East': 'JR東日本'
+  };
+
+  // セレクトボックスを構築
+  railwaySelect.innerHTML = '<option value="">路線を選択してください</option>';
+
+  Object.entries(operators).forEach(([operatorId, operatorName]) => {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = operatorName;
+
+    ODPT_RAILWAYS
+      .filter(r => r.operator === operatorId)
+      .forEach(railway => {
+        const option = document.createElement('option');
+        option.value = railway.id;
+        option.textContent = railway.name;
+        optgroup.appendChild(option);
+      });
+
+    if (optgroup.children.length > 0) {
+      railwaySelect.appendChild(optgroup);
+    }
+  });
+}
+
+/**
+ * 路線に紐づく駅をロード
+ */
+function loadStationsForRailway(railwayId) {
+  const railway = ODPT_RAILWAYS.find(r => r.id === railwayId);
+  if (!railway) {
+    stationSelect.innerHTML = '<option value="">駅を選択してください</option>';
+    stationSelect.disabled = true;
+    return;
+  }
+
+  stationSelect.innerHTML = '<option value="">駅を選択してください</option>';
+  railway.stations.forEach(station => {
+    const option = document.createElement('option');
+    option.value = station.id;
+    option.textContent = station.name;
+    stationSelect.appendChild(option);
+  });
+
+  stationSelect.disabled = false;
+}
+
+/**
+ * 時刻表を取得
+ */
+async function fetchTimetable() {
+  if (!selectedRailway || !selectedStation) {
+    return;
+  }
+
+  // UI更新
+  timetableBtn.disabled = true;
+  timetableLoading.classList.remove('hidden');
+  clearElement(timetableResults);
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/timetable?station=${encodeURIComponent(selectedStation)}&railway=${encodeURIComponent(selectedRailway)}`
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || '時刻表の取得に失敗しました');
+    }
+
+    const data = await response.json();
+    displayTimetable(data);
+
+  } catch (error) {
+    console.error('Timetable fetch error:', error);
+    showTimetableError(error.message || '時刻表の取得に失敗しました');
+  } finally {
+    timetableBtn.disabled = false;
+    timetableLoading.classList.add('hidden');
+  }
+}
+
+/**
+ * 時刻表を表示
+ */
+function displayTimetable(data) {
+  clearElement(timetableResults);
+
+  if (!data.timetables || data.timetables.length === 0) {
+    showTimetableError('時刻表データがありません');
+    return;
+  }
+
+  // 選択中のカレンダーに対応する時刻表をフィルタ
+  const filteredTimetables = data.timetables.filter(
+    tt => tt.calendar === selectedCalendar
+  );
+
+  if (filteredTimetables.length === 0) {
+    showTimetableError(`${getCalendarLabel(selectedCalendar)}の時刻表データがありません`);
+    return;
+  }
+
+  filteredTimetables.forEach(timetable => {
+    const card = document.createElement('div');
+    card.className = 'timetable-card';
+
+    // ヘッダー
+    const header = document.createElement('div');
+    header.className = 'timetable-header';
+
+    const direction = document.createElement('div');
+    direction.className = 'timetable-direction';
+    direction.textContent = formatDirection(timetable.direction);
+
+    header.appendChild(direction);
+    card.appendChild(header);
+
+    // 時刻グリッド
+    const grid = document.createElement('div');
+    grid.className = 'timetable-grid';
+
+    // 時刻をグループ化
+    const hourGroups = groupByHour(timetable.objects);
+
+    Object.entries(hourGroups).forEach(([hour, trains]) => {
+      const hourCell = document.createElement('div');
+      hourCell.className = 'timetable-hour';
+      hourCell.textContent = hour;
+      grid.appendChild(hourCell);
+
+      const minutesCell = document.createElement('div');
+      minutesCell.className = 'timetable-minutes';
+
+      trains.forEach(train => {
+        const minute = document.createElement('span');
+        minute.className = 'timetable-minute ' + getTrainTypeClass(train.trainType);
+        minute.textContent = train.time.split(':')[1];
+        minute.title = `${train.trainType} → ${train.destinationName}`;
+        minutesCell.appendChild(minute);
+      });
+
+      grid.appendChild(minutesCell);
+    });
+
+    card.appendChild(grid);
+    timetableResults.appendChild(card);
+  });
+}
+
+/**
+ * 時間でグループ化
+ */
+function groupByHour(objects) {
+  const groups = {};
+  objects.forEach(obj => {
+    if (!obj.time) return;
+    const hour = obj.time.split(':')[0];
+    if (!groups[hour]) {
+      groups[hour] = [];
+    }
+    groups[hour].push(obj);
+  });
+  return groups;
+}
+
+/**
+ * 列車種別のCSSクラス
+ */
+function getTrainTypeClass(trainType) {
+  if (!trainType) return 'local';
+  const type = trainType.toLowerCase();
+  if (type.includes('express') || type.includes('急行')) return 'express';
+  if (type.includes('rapid') || type.includes('快速')) return 'rapid';
+  return 'local';
+}
+
+/**
+ * 方面表示フォーマット
+ */
+function formatDirection(direction) {
+  if (!direction) return '不明方面';
+  // "TokyoMetro.Ginza.Asakusa" -> "浅草方面"
+  const parts = direction.split('.');
+  const last = parts[parts.length - 1];
+  return `${last}方面`;
+}
+
+/**
+ * カレンダーラベル
+ */
+function getCalendarLabel(calendar) {
+  const labels = {
+    'weekday': '平日',
+    'saturday': '土曜',
+    'holiday': '休日'
+  };
+  return labels[calendar] || calendar;
+}
+
+/**
+ * 時刻表エラー表示
+ */
+function showTimetableError(message) {
+  const errorEl = document.createElement('div');
+  errorEl.className = 'error';
+  errorEl.textContent = message;
+  timetableResults.appendChild(errorEl);
+}
+
+/**
+ * 運行情報機能初期化
+ */
+function initTraininfo() {
+  traininfoBtn.addEventListener('click', fetchTraininfo);
+}
+
+/**
+ * 運行情報を取得
+ */
+async function fetchTraininfo() {
+  traininfoBtn.disabled = true;
+  traininfoLoading.classList.remove('hidden');
+  clearElement(traininfoResults);
+
+  try {
+    const response = await fetch(`${API_BASE}/traininfo`);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || '運行情報の取得に失敗しました');
+    }
+
+    const data = await response.json();
+    displayTraininfo(data);
+
+  } catch (error) {
+    console.error('Traininfo fetch error:', error);
+    showTraininfoError(error.message || '運行情報の取得に失敗しました');
+  } finally {
+    traininfoBtn.disabled = false;
+    traininfoLoading.classList.add('hidden');
+  }
+}
+
+/**
+ * 運行情報を表示
+ */
+function displayTraininfo(data) {
+  clearElement(traininfoResults);
+
+  if (!data.trainInfos || data.trainInfos.length === 0) {
+    // 運行情報なし = 平常運転
+    const card = document.createElement('div');
+    card.className = 'traininfo-card normal';
+
+    const header = document.createElement('div');
+    header.className = 'traininfo-header';
+
+    const railway = document.createElement('div');
+    railway.className = 'traininfo-railway';
+    railway.textContent = '首都圏の鉄道';
+
+    const status = document.createElement('span');
+    status.className = 'traininfo-status normal';
+    status.textContent = '平常運転';
+
+    header.appendChild(railway);
+    header.appendChild(status);
+    card.appendChild(header);
+
+    const text = document.createElement('p');
+    text.className = 'traininfo-text';
+    text.textContent = '現在、運行情報はありません。すべての路線が平常運転しています。';
+    card.appendChild(text);
+
+    traininfoResults.appendChild(card);
+    return;
+  }
+
+  data.trainInfos.forEach(info => {
+    const card = document.createElement('div');
+    card.className = `traininfo-card ${info.status}`;
+
+    // ヘッダー
+    const header = document.createElement('div');
+    header.className = 'traininfo-header';
+
+    const railway = document.createElement('div');
+    railway.className = 'traininfo-railway';
+    railway.textContent = info.railwayName || formatRailwayId(info.railway);
+
+    const status = document.createElement('span');
+    status.className = `traininfo-status ${info.status}`;
+    status.textContent = getStatusLabel(info.status);
+
+    header.appendChild(railway);
+    header.appendChild(status);
+    card.appendChild(header);
+
+    // テキスト
+    if (info.text) {
+      const text = document.createElement('p');
+      text.className = 'traininfo-text';
+      text.textContent = info.text;
+      card.appendChild(text);
+    }
+
+    // 更新時刻
+    if (info.updatedAt) {
+      const time = document.createElement('div');
+      time.className = 'traininfo-time';
+      time.textContent = `更新: ${formatDateTime(info.updatedAt)}`;
+      card.appendChild(time);
+    }
+
+    traininfoResults.appendChild(card);
+  });
+}
+
+/**
+ * ステータスラベル
+ */
+function getStatusLabel(status) {
+  const labels = {
+    'normal': '平常運転',
+    'delayed': '遅延',
+    'suspended': '運転見合わせ',
+    'resumed': '運転再開'
+  };
+  return labels[status] || status;
+}
+
+/**
+ * 路線ID整形
+ */
+function formatRailwayId(railwayId) {
+  if (!railwayId) return '不明';
+  const parts = railwayId.replace('odpt.Railway:', '').split('.');
+  return parts.join(' ');
+}
+
+/**
+ * 日時フォーマット
+ */
+function formatDateTime(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  return date.toLocaleString('ja-JP', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
+ * 運行情報エラー表示
+ */
+function showTraininfoError(message) {
+  const errorEl = document.createElement('div');
+  errorEl.className = 'error';
+  errorEl.textContent = message;
+  traininfoResults.appendChild(errorEl);
+}
+
+/**
+ * 要素の子要素をすべて削除
+ */
+function clearElement(element) {
+  while (element.firstChild) {
+    element.removeChild(element.firstChild);
   }
 }
 

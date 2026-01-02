@@ -16,6 +16,22 @@
         "function": "health"
       },
       {
+        "source": "/api/railways",
+        "function": "railways"
+      },
+      {
+        "source": "/api/stations",
+        "function": "stations"
+      },
+      {
+        "source": "/api/timetable",
+        "function": "timetable"
+      },
+      {
+        "source": "/api/traininfo",
+        "function": "traininfo"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

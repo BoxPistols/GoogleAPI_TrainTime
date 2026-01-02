@@ -18,9 +18,36 @@
       <h1>電車乗換案内</h1>
     </header>
 
-    <!-- 検索フォーム -->
+    <!-- タブナビゲーション -->
+    <nav class="tabs" role="tablist" aria-label="機能切り替え">
+      <button
+        id="tab-route"
+        class="tab active"
+        role="tab"
+        aria-selected="true"
+        aria-controls="panel-route"
+      >乗換検索</button>
+      <button
+        id="tab-timetable"
+        class="tab"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-timetable"
+      >時刻表</button>
+      <button
+        id="tab-traininfo"
+        class="tab"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-traininfo"
+      >運行情報</button>
+    </nav>
+
+    <!-- メインコンテンツ -->
     <main class="main">
-      <form id="search-form" class="search-card" role="search" aria-label="乗換検索">
+      <!-- 乗換検索パネル -->
+      <div id="panel-route" class="panel" role="tabpanel" aria-labelledby="tab-route">
+        <form id="search-form" class="search-card" role="search" aria-label="乗換検索">
         <div class="input-group">
           <label for="departure" id="departure-label">出発駅</label>
           <input
@@ -125,14 +152,86 @@
         role="alert"
         aria-live="assertive"
       ></div>
+      </div><!-- /panel-route -->
+
+      <!-- 時刻表パネル -->
+      <div id="panel-timetable" class="panel hidden" role="tabpanel" aria-labelledby="tab-timetable">
+        <div class="search-card">
+          <div class="input-group">
+            <label for="railway-select" id="railway-label">路線を選択</label>
+            <select
+              id="railway-select"
+              aria-labelledby="railway-label"
+            >
+              <option value="">路線を選択してください</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label for="station-select" id="station-label">駅を選択</label>
+            <select
+              id="station-select"
+              aria-labelledby="station-label"
+              disabled
+            >
+              <option value="">駅を選択してください</option>
+            </select>
+          </div>
+
+          <div class="calendar-tabs" role="tablist" aria-label="曜日選択">
+            <button type="button" class="calendar-tab active" data-calendar="weekday" role="tab" aria-selected="true">平日</button>
+            <button type="button" class="calendar-tab" data-calendar="saturday" role="tab" aria-selected="false">土曜</button>
+            <button type="button" class="calendar-tab" data-calendar="holiday" role="tab" aria-selected="false">休日</button>
+          </div>
+
+          <button type="button" id="timetable-btn" class="search-btn" disabled>時刻表を表示</button>
+        </div>
+
+        <!-- 時刻表表示エリア -->
+        <section
+          id="timetable-results"
+          class="timetable-results"
+          role="region"
+          aria-label="時刻表"
+          aria-live="polite"
+        ></section>
+
+        <div id="timetable-loading" class="loading hidden" role="status" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>読み込み中...</p>
+        </div>
+      </div><!-- /panel-timetable -->
+
+      <!-- 運行情報パネル -->
+      <div id="panel-traininfo" class="panel hidden" role="tabpanel" aria-labelledby="tab-traininfo">
+        <div class="search-card">
+          <p class="info-text">首都圏の鉄道運行情報をリアルタイムで表示します。</p>
+          <button type="button" id="traininfo-btn" class="search-btn">運行情報を取得</button>
+        </div>
+
+        <!-- 運行情報表示エリア -->
+        <section
+          id="traininfo-results"
+          class="traininfo-results"
+          role="region"
+          aria-label="運行情報"
+          aria-live="polite"
+        ></section>
+
+        <div id="traininfo-loading" class="loading hidden" role="status" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>読み込み中...</p>
+        </div>
+      </div><!-- /panel-traininfo -->
     </main>
 
     <!-- フッター -->
     <footer class="footer">
-      <p>Powered by Google Maps API</p>
+      <p>Powered by Google Maps API & ODPT</p>
     </footer>
   </div>
 
+  <script src="./js/odpt-data.js"></script>
   <script src="./js/app.js"></script>
 </body>
 </html>

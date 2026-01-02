@@ -88,6 +88,61 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+/* タブナビゲーション */
+.tabs {
+  display: flex;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex: 1;
+  min-width: max-content;
+  padding: 14px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--accent-color);
+  background: var(--accent-light);
+}
+
+.tab.active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+}
+
+/* パネル */
+.panel {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* メインコンテンツ */
 .main {
   flex: 1;
@@ -545,6 +600,237 @@ html, body {
   text-align: center;
   margin-top: 16px;
   font-weight: 500;
+}
+
+/* セレクトボックス */
+.input-group select {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  min-height: 48px;
+}
+
+.input-group select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
+}
+
+.input-group select:disabled {
+  background-color: var(--bg-input);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* 情報テキスト */
+.info-text {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+/* カレンダータブ */
+.calendar-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.calendar-tab {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.calendar-tab:hover {
+  background: var(--accent-light);
+  color: var(--accent-color);
+}
+
+.calendar-tab.active {
+  background: var(--accent-light);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+/* 時刻表表示エリア */
+.timetable-results {
+  margin-top: 16px;
+}
+
+.timetable-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.timetable-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.timetable-direction {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.timetable-grid {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 8px 0;
+}
+
+.timetable-hour {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-color);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.timetable-minutes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+  align-items: center;
+}
+
+.timetable-minute {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border-radius: 6px;
+  cursor: default;
+}
+
+.timetable-minute.express {
+  background: #ff6b6b;
+  color: white;
+}
+
+.timetable-minute.rapid {
+  background: #4ecdc4;
+  color: white;
+}
+
+.timetable-minute.local {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+/* 運行情報表示エリア */
+.traininfo-results {
+  margin-top: 16px;
+}
+
+.traininfo-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--accent-color);
+}
+
+.traininfo-card.normal {
+  border-left-color: #4caf50;
+}
+
+.traininfo-card.delayed {
+  border-left-color: #ff9800;
+}
+
+.traininfo-card.suspended {
+  border-left-color: #f44336;
+}
+
+.traininfo-card.resumed {
+  border-left-color: #2196f3;
+}
+
+.traininfo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.traininfo-railway {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.traininfo-status {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.traininfo-status.normal {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.traininfo-status.delayed {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.traininfo-status.suspended {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.traininfo-status.resumed {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.traininfo-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.traininfo-time {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 8px;
 }
 
 /* 非表示 */
